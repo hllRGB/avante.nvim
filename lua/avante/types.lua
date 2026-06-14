@@ -1,4 +1,4 @@
----@meta
+---@meta types
 
 ---@class vim.api.create_autocmd.callback.args
 ---@field id number
@@ -118,7 +118,7 @@ vim.g.avante_login = vim.g.avante_login
 ---@field turn_id string | nil
 ---@field is_calling boolean | nil
 ---@field original_content AvanteLLMMessageContent | nil
----@field acp_tool_call? avante.acp.ToolCall
+---@field acp_tool_call? avante.acp.ToolCall | avante.acp.ToolCallUpdate
 
 ---@class AvanteLLMToolResult
 ---@field tool_name string
@@ -245,27 +245,30 @@ vim.g.avante_login = vim.g.avante_login
 ---@class AvanteCurlOutput: {url: string, proxy: string, insecure: boolean, body: table<string, any> | string, headers: table<string, string>, rawArgs: string[] | nil}
 ---@alias AvanteCurlArgsParser fun(self: AvanteProviderFunctor, prompt_opts: AvantePromptOptions): (AvanteCurlOutput | nil)
 ---
----@alias AvanteResponseParser fun(self: AvanteProviderFunctor, ctx: any, data_stream: string, event_state: string, opts: AvanteHandlerOptions): nil
+---@alias AvanteResponseParser fun(self: AvanteProviderFunctor, ctx: any, data_stream: string, event_state: string?, opts: AvanteHandlerOptions): nil
 ---
 ---@class AvanteDefaultBaseProvider: table<string, any>
----@field endpoint? string
+---@field endpoint string Endpoint (e.g. "https://api.mistral.ai/v1")
 ---@field extra_request_body? table<string, any>
 ---@field model? string
 ---@field model_names? string[]
 ---@field local? boolean
 ---@field proxy? string
 ---@field keep_alive? string
----@field timeout? integer
----@field allow_insecure? boolean
+---@field timeout integer Timeout in milliseconds, increase this for reasoning models
+---@field allow_insecure? boolean Allow insecure server connections
 ---@field api_key_name? string
+---Either the name of the environment variable containing the API key (avante will try a variant prefixed with "AVANTE_" as well) or if the value starts with "cmd:", avante will run the command and retreive the key from its stdout
 ---@field _shellenv? string
----@field disable_tools? boolean
+---@field disable_tools? boolean disable if prompt consumes too many tokens
 ---@field entra? boolean
----@field hide_in_model_selector? boolean
+---@field hide_in_model_selector? boolean Dont show provider in |:AvanteSwitchProvider|
 ---@field use_ReAct_prompt? boolean
 ---@field context_window? integer
 ---@field use_response_api? boolean | fun(provider: AvanteDefaultBaseProvider, ctx?: any): boolean
 ---@field support_previous_response_id? boolean
+--- NOTE: Response API automatically manages conversation state using previous_response_id for tool calling
+---
 ---
 ---@class AvanteSupportedProvider: AvanteDefaultBaseProvider
 ---@field __inherited_from? string
@@ -542,7 +545,7 @@ vim.g.avante_login = vim.g.avante_login
 ---@field content string
 ---@field uri string
 ---
----@alias AvanteSlashCommandBuiltInName "clear" | "help" | "lines" | "commit" | "new"
+---@alias AvanteSlashCommandBuiltInName "clear" | "help" | "lines" | "commit" | "new" | "init" | "compact" | "model"
 ---@alias AvanteSlashCommandCallback fun(self: avante.Sidebar, args: string, cb?: fun(args: string): nil): nil
 ---@class AvanteSlashCommand
 ---@field name AvanteSlashCommandBuiltInName | string

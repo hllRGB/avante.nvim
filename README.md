@@ -353,9 +353,8 @@ programs.neovim = {
       plugin = pkgs.vimPlugins.avante-nvim;
       type = "lua";
       config = ''
-              require("avante_lib").load()
               require("avante").setup()
-      '' # or builtins.readFile ./plugins/avante.lua;
+      ''; # or builtins.readFile ./plugins/avante.lua
     }
   ];
 };
@@ -435,6 +434,32 @@ require('avante').setup({
 ### Default setup configuration
 
 _See [config.lua#L9](./lua/avante/config.lua) for the full config_
+
+You can pass options directly to `setup()`:
+
+```lua
+require("avante").setup({
+  provider = "claude",
+  behaviour = {
+    auto_suggestions = false,
+  },
+})
+```
+
+Alternatively, define the same options in `vim.g.avante` before calling `setup()`:
+
+```lua
+vim.g.avante = {
+  provider = "claude",
+  behaviour = {
+    auto_suggestions = false,
+  },
+}
+
+require("avante").setup()
+```
+
+If both are used, options passed to `setup()` override values from `vim.g.avante`.
 
 <details>
 <summary>Default configuration</summary>
@@ -1255,8 +1280,8 @@ ACP providers are configured in the `acp_providers` section of your configuratio
       },
     },
     ["claude-code"] = {
-      command = "npx",
-      args = { "@zed-industries/claude-code-acp" },
+      command = "claude-agent-acp",
+      args = { },
       env = {
         NODE_NO_WARNINGS = "1",
         ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY"),
@@ -1267,8 +1292,8 @@ ACP providers are configured in the `acp_providers` section of your configuratio
       args = { "acp" },
     },
     ["codex"] = {
-      command = "npx",
-      args = { "@zed-industries/codex-acp" },
+      command = "codex-acp",
+      args = {},
       env = {
         NODE_NO_WARNINGS = "1",
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY"),
@@ -1663,7 +1688,7 @@ You can also disable specific tools while keeping agentic mode enabled by config
 
 ## Contributing
 
-Contributions to avante.nvim are welcome! If you're interested in helping out, please feel free to submit pull requests or open issues. Before contributing, ensure that your code has been thoroughly tested.
+Contributions to avante.nvim are welcome! If you're interested in helping out, please feel free to submit pull requests or open issues.
 
 See [wiki](https://github.com/yetone/avante.nvim/wiki) for more recipes and tricks.
 

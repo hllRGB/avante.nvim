@@ -1,3 +1,7 @@
+---@mod avante-utils avante utilities
+---@brief [[
+---Contains basic utilities used across the codebase, notably the notification system and logging methods
+---@brief ]]
 local api = vim.api
 local fn = vim.fn
 local lsp = vim.lsp
@@ -97,8 +101,8 @@ local function get_cmd_for_shell(input_cmd, shell_cmd)
     cmd = { "powershell.exe", "-NoProfile", "-Command", input_cmd:gsub('"', "'") }
   else
     -- linux and macos we will just do sh -c
-    shell_cmd = shell_cmd or "sh -c"
-    for _, cmd_part in ipairs(vim.split(shell_cmd, " ")) do
+    local effective_shell_cmd = shell_cmd or "sh -c"
+    for _, cmd_part in ipairs(vim.split(effective_shell_cmd, " ")) do
       table.insert(cmd, cmd_part)
     end
     table.insert(cmd, input_cmd)
@@ -948,7 +952,7 @@ function M.scan_directory(options)
   end)()
 
   if not cmd then
-    if M.path_exists(M.join_paths(options.directory, ".git")) and vim.fn.executable("git") == 1 then
+    if M.path_exists(vim.fs.joinpath(options.directory, ".git")) and vim.fn.executable("git") == 1 then
       if vim.fn.has("win32") == 1 then
         cmd = {
           "powershell",
@@ -979,7 +983,7 @@ function M.scan_directory(options)
   files = vim
     .iter(files)
     :map(function(file)
-      if not M.is_absolute_path(file) then return M.join_paths(options.directory, file) end
+      if not M.is_absolute_path(file) then return vim.fs.joinpath(options.directory, file) end
       return file
     end)
     :totable()
@@ -1033,28 +1037,12 @@ function M.make_relative_path(filepath, base_dir) return M.path.relative(base_di
 
 function M.is_absolute_path(path) return M.path.is_absolute(path) end
 
+function M.abspath(path) return M.path.abspath(path) end
+
 function M.to_absolute_path(path)
   if not path or path == "" then return path end
   if M.is_absolute_path(path) or path:sub(1, 7) == "term://" then return path end
-  return M.join_paths(M.get_project_root(), path)
-end
-
-function M.join_paths(...)
-  local paths = { ... }
-  local result = paths[1] or ""
-  for i = 2, #paths do
-    local path = paths[i]
-    if path == nil or path == "" then goto continue end
-
-    if M.is_absolute_path(path) then
-      result = path
-      goto continue
-    end
-
-    result = result == "" and path or M.path.join(result, path)
-    ::continue::
-  end
-  return M.norm(result)
+  return M.abspath(vim.fs.joinpath(M.get_project_root(), path))
 end
 
 function M.path_exists(path) return M.path.is_exist(path) end
@@ -1222,7 +1210,7 @@ end
 function M.open_buffer(path, set_current_buf)
   if set_current_buf == nil then set_current_buf = true end
 
-  local abs_path = M.join_paths(M.get_project_root(), path)
+  local abs_path = M.is_absolute_path(path) and path or vim.fs.joinpath(M.get_project_root(), path)
 
   local bufnr ---@type integer
   if set_current_buf then
@@ -1357,7 +1345,7 @@ function M.uniform_path(path)
   if type(path) ~= "string" then path = tostring(path) end
   if not M.file.is_in_project(path) then return path end
   local project_root = M.get_project_root()
-  local abs_path = M.is_absolute_path(path) and path or M.join_paths(project_root, path)
+  local abs_path = M.is_absolute_path(path) and path or vim.fs.joinpath(project_root, path)
   local relative_path = M.make_relative_path(abs_path, project_root)
   return relative_path
 end
@@ -1391,7 +1379,8 @@ end
 ---@return string|nil error
 ---@return string|nil errname
 function M.read_file_from_buf_or_disk(filepath)
-  local abs_path = filepath:sub(1, 7) == "term://" and filepath or M.join_paths(M.get_project_root(), filepath)
+  local abs_path = (filepath:sub(1, 7) == "term://" or M.is_absolute_path(filepath)) and filepath
+    or vim.fs.joinpath(M.get_project_root(), filepath)
   --- Lookup if the file is loaded in a buffer
   local ok, bufnr = pcall(vim.fn.bufnr, abs_path)
   if ok then
@@ -1436,6 +1425,7 @@ function M.icon(string_with_icon, utf8_fallback)
   end
 end
 
+---@return table
 function M.deep_extend_with_metatable(behavior, ...)
   local tables = { ... }
   local base = tables[1]
@@ -1535,6 +1525,8 @@ function M.llm_tool_param_fields_to_json_schema(fields)
   for _, field in ipairs(fields) do
     if field.type == "object" and field.fields then
       local properties_, required_ = M.llm_tool_param_fields_to_json_schema(field.fields)
+      -- Ensure nested properties is always a JSON object, not array
+      if vim.tbl_isempty(properties_) then properties_ = vim.empty_dict() end
       properties[field.name] = {
         type = field.type,
         description = field.get_description and field.get_description() or field.description,
@@ -1562,68 +1554,11 @@ function M.llm_tool_param_fields_to_json_schema(fields)
   return properties, required
 end
 
+---Return available "/commands"
 ---@return AvanteSlashCommand[]
 function M.get_commands()
   local Config = require("avante.config")
-
-  ---@param items_ {name: string, description: string, shorthelp?: string}[]
-  ---@return string
-  local function get_help_text(items_)
-    local help_text = ""
-    for _, item in ipairs(items_) do
-      help_text = help_text .. "- " .. item.name .. ": " .. (item.shorthelp or item.description) .. "\n"
-    end
-    return help_text
-  end
-
-  local builtin_items = {
-    { description = "Show help message", name = "help" },
-    { description = "Init AGENTS.md based on the current project", name = "init" },
-    { description = "Clear chat history", name = "clear" },
-    { description = "New chat", name = "new" },
-    { description = "Compact history messages to save tokens", name = "compact" },
-    {
-      shorthelp = "Ask a question about specific lines",
-      description = "/lines <start>-<end> <question>",
-      name = "lines",
-    },
-    { description = "Commit the changes", name = "commit" },
-  }
-
-  ---@type {[AvanteSlashCommandBuiltInName]: AvanteSlashCommandCallback}
-  local builtin_cbs = {
-    help = function(sidebar, args, cb)
-      local help_text = get_help_text(builtin_items)
-      sidebar:update_content(help_text, { focus = false, scroll = false })
-      if cb then cb(args) end
-    end,
-    clear = function(sidebar, args, cb) sidebar:clear_history(args, cb) end,
-    new = function(sidebar, args, cb) sidebar:new_chat(args, cb) end,
-    compact = function(sidebar, args, cb) sidebar:compact_history_messages(args, cb) end,
-    init = function(sidebar, args, cb) sidebar:init_current_project(args, cb) end,
-    lines = function(_, args, cb)
-      if cb then cb(args) end
-    end,
-    commit = function(_, _, cb)
-      local question = "Please commit the changes"
-      if cb then cb(question) end
-    end,
-  }
-
-  local builtin_commands = vim
-    .iter(builtin_items)
-    :map(
-      ---@param item AvanteSlashCommand
-      function(item)
-        return {
-          name = item.name,
-          description = item.description,
-          callback = builtin_cbs[item.name],
-          details = item.shorthelp and table.concat({ item.shorthelp, item.description }, "\n") or item.description,
-        }
-      end
-    )
-    :totable()
+  local builtin_commands = require("avante.slashcommands").get_builtin_commands()
 
   local commands = {}
   local seen = {}
@@ -1807,7 +1742,7 @@ function M.get_unified_diff(text1, text2, opts)
   opts.result_type = "unified"
   opts.ctxlen = opts.ctxlen or 3
 
-  return vim.text.diff(text1, text2, opts)
+  return vim.diff(text1, text2, opts)
 end
 
 function M.is_floating_window(win_id)

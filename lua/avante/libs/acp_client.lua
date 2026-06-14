@@ -1,3 +1,18 @@
+---@mod avante-acp avante ACP
+---
+---@brief [[
+---
+---Avante.nvim now supports the Agent Client Protocol (ACP) (https://agentclientprotocol.com/overview/introduction), enabling seamless integration with AI agents that follow this standardized communication protocol.
+---
+---What is ACP?~
+---
+---The Agent Client Protocol (ACP) is a standardized protocol that enables AI agents to communicate with development tools and environments. It provides:
+---
+---- **Standardized Communication**: A unified JSON-RPC based protocol for agent-client interactions
+---- **Tool Integration**: Support for various development tools like file operations, code execution, and search
+---- **Session Management**: Persistent sessions that maintain context across interactions
+---- **Permission System**: Granular control over what agents can access and modify
+---@brief ]]
 local Config = require("avante.config")
 local Utils = require("avante.utils")
 
@@ -226,6 +241,8 @@ ACPClient.ERROR_CODES = {
   RESOURCE_NOT_FOUND = -32002,
 }
 
+local LOG_SEPARATOR = string.rep("=", 80) .. "\n"
+
 ---@class ACPHandlers
 ---@field on_session_update? fun(update: avante.acp.UserMessageChunk | avante.acp.AgentMessageChunk | avante.acp.AgentThoughtChunk | avante.acp.ToolCallUpdate | avante.acp.PlanUpdate | avante.acp.AvailableCommandsUpdate)
 ---@field on_request_permission? fun(tool_call: table, options: table[], callback: fun(option_id: string | nil)): nil
@@ -236,7 +253,7 @@ ACPClient.ERROR_CODES = {
 ---@class ACPConfig
 ---@field transport_type "stdio" | "websocket" | "tcp"
 ---@field command? string Command to spawn agent (for stdio)
----@field args? string[] Arguments for agent command
+---@field args string[] Arguments for agent command
 ---@field env? table Environment variables
 ---@field host? string Host for tcp/websocket
 ---@field port? number Port for tcp/websocket
@@ -284,7 +301,9 @@ function ACPClient:_debug_log(message)
   end
 
   -- Open file if needed
-  if not self.debug_log_file then self.debug_log_file = io.open("/tmp/avante-acp-session.log", "a") end
+  if not self.debug_log_file then
+    self.debug_log_file = io.open(vim.fs.joinpath(vim.fn.stdpath("log"), "avante-acp-session.log"), "a")
+  end
 
   if self.debug_log_file then
     self.debug_log_file:write(message)
@@ -375,7 +394,7 @@ function ACPClient:_create_stdio_transport()
       error("Failed to create pipes for ACP agent")
     end
 
-    local args = vim.deepcopy(self.config.args or {})
+    local args = vim.deepcopy(self.config.args)
     local env = self.config.env
 
     -- Start with system environment and override with config env
@@ -526,7 +545,7 @@ function ACPClient:_send_request(method, params, callback)
   self.callbacks[id] = callback
 
   local data = vim.json.encode(message)
-  self:_debug_log("request: " .. data .. string.rep("=", 100) .. "\n")
+  self:_debug_log("request: " .. data .. "\n" .. LOG_SEPARATOR)
   self.transport:send(data)
 end
 
@@ -807,7 +826,7 @@ function ACPClient:authenticate(method_id, callback)
 
   self:_send_request("authenticate", {
     methodId = method_id,
-  }, function(result, err) callback(err) end)
+  }, function(_result, err) callback(err) end)
 end
 
 ---Create new session
@@ -893,7 +912,7 @@ function ACPClient:set_mode(session_id, mode_id, callback)
   self:_send_request("session/set_mode", {
     sessionId = session_id,
     modeId = mode_id,
-  }, function(result, err)
+  }, function(_result, err)
     if err then
       callback(nil, err)
       return
@@ -923,7 +942,7 @@ function ACPClient:set_model(session_id, model_id, callback)
   self:_send_request("session/set_model", {
     sessionId = session_id,
     modelId = model_id,
-  }, function(result, err)
+  }, function(_result, err)
     if err then
       callback(nil, err)
       return

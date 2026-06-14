@@ -15,7 +15,7 @@ DEPS=(
   "folke/lazy.nvim"
 )
 
-LUALS_VERSION="3.13.6"
+LUALS_VERSION="3.18.2"
 
 verbose=false
 
@@ -27,6 +27,11 @@ log_verbose() {
     if [ "$verbose" = "true" ]; then
         echo "$1" >&2
     fi
+}
+
+die() {
+    echo "Error: $1" >&2
+    exit 1
 }
 
 # Process a single dependency (used for parallel execution)
@@ -93,7 +98,6 @@ install_luals() {
     local os_name=""
     local arch=""
     local file_ext=""
-    local extract_cmd=""
 
     case "$(uname -s)" in
         Linux*)
@@ -127,13 +131,6 @@ install_luals() {
             ;;
     esac
 
-    # Set up extraction command based on file type
-    if [ "$file_ext" = "tar.gz" ]; then
-        extract_cmd="tar zx --directory"
-    else
-        extract_cmd="unzip -q -d"
-    fi
-
     local platform="${os_name}-${arch}"
     local luals_url_template="https://github.com/LuaLS/lua-language-server/releases/download/__VERSION__/lua-language-server-__VERSION__-__PLATFORM__.__EXT__"
     local luals_download_url="${luals_url_template//__VERSION__/$LUALS_VERSION}"
@@ -143,7 +140,7 @@ install_luals() {
     local luals_dir="$dest_dir/lua-language-server-${LUALS_VERSION}-${platform}"
 
     if [ ! -d "$luals_dir" ]; then
-        log "Installing lua-language-server ${LUALS_VERSION} for ${platform}..."
+        log "Installing lua-language-server ${LUALS_VERSION} for ${platform} from https://github.com/LuaLS/lua-language-server/releases..."
         mkdir -p "$luals_dir"
 
         if [ "$file_ext" = "tar.gz" ]; then
@@ -218,7 +215,7 @@ install_nvim_runtime() {
 }
 
 generate_luarc() {
-    local luarc_path=${1:-"$PWD/target/tests/luarc.json"}
+    local luarc_path=${1:-"target/tests/luarc.json"}
     local luarc_template="luarc.json.template"
 
     log_verbose "Generating luarc file at: $luarc_path"

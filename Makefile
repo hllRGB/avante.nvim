@@ -6,14 +6,15 @@ ifeq ($(UNAME), Linux)
 	EXT := so
 else ifeq ($(UNAME), Darwin)
 	OS := macOS
-	EXT := dylib
+	# looks interchangeable with "dylib", but nvim will find .so automatically in rtp
+	EXT := so
 else
 	$(error Unsupported operating system: $(UNAME))
 endif
 
 LUA_VERSIONS := luajit lua51
 
-BUILD_DIR := build
+BUILD_DIR := lua
 BUILD_FROM_SOURCE ?= false
 TARGET_LIBRARY ?= all
 
@@ -68,7 +69,24 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
 clean:
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BUILD_DIR)/*.$(EXT)
+
+.PHONY: docgen
+docgen:
+	vimcats --prefix-func \
+		lua/avante/init.lua \
+		lua/avante/config.lua \
+		lua/avante/commands.lua \
+		lua/avante/sidebar.lua \
+		lua/avante/slashcommands.lua \
+		lua/cmp_avante/mentions.lua \
+		lua/avante/rag_service.lua \
+		lua/avante/llm_tools/init.lua \
+		lua/avante/utils/prompts.lua \
+		lua/avante/extensions/init.lua \
+		lua/avante/utils/init.lua \
+		lua/avante/libs/acp_client.lua \
+		> doc/avante.txt
 
 luacheck:
 	@luacheck `find \( -path './target' -prune \) -o -name "*.lua" -print` --codes
@@ -99,6 +117,10 @@ luatest:
 
 .PHONY: lint
 lint: luacheck luastylecheck ruststylecheck rustlint
+
+.PHONY: .luarc.json
+.luarc.json:
+	./scripts/setup-deps.sh generate-luarc ./.luarc.json
 
 .PHONY: lua-typecheck
 lua-typecheck:

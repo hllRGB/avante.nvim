@@ -1,5 +1,4 @@
 local utils = require("avante.utils")
-local PPath = require("plenary.path")
 
 local llm = require("avante.llm")
 
@@ -7,11 +6,13 @@ describe("generate_prompts", function()
   local project_root = "/tmp/project_root"
 
   before_each(function()
-    local mock_dir = PPath:new("tests", project_root)
-    mock_dir:mkdir({ parents = true })
+    local mock_dir = vim.fs.joinpath("tests", project_root)
+    vim.fn.mkdir(mock_dir, "p")
 
-    local mock_file = PPath:new("tests", project_root, "avante.md")
-    mock_file:write("# Mock Instructions\nThis is a mock instruction file.", "w")
+    local mock_file = vim.fs.joinpath("tests", project_root, "avante.md")
+    local file = assert(io.open(mock_file, "w"))
+    file:write("# Mock Instructions\nThis is a mock instruction file.")
+    file:close()
 
     -- Mock the project root
     utils.root = {}
@@ -72,20 +73,21 @@ describe("generate_prompts", function()
 
     -- Mock P.available to always return true
     local Path = require("avante.path")
+    ---@diagnostic disable-next-line: duplicate-set-field
     Path.available = function() return true end
 
     -- Mock the Prompt functions directly since _templates_lib is a local variable
     -- that we can't easily access from outside the module
-    Path.prompts.initialize = function(cache_directory, project_directory)
+    Path.prompts.initialize = function(_cache_directory, _project_directory)
       -- Mock initialization - no-op for tests
     end
 
-    Path.prompts.render_file = function(path, opts)
+    Path.prompts.render_file = function(_path, _opts)
       -- Mock render - return empty string for tests
       return ""
     end
 
-    Path.prompts.render_mode = function(mode, opts)
+    Path.prompts.render_mode = function(_mode, _opts)
       -- Mock render_mode - return empty string for tests
       return ""
     end
@@ -95,8 +97,8 @@ describe("generate_prompts", function()
 
   after_each(function()
     -- Clean up created test files and directories
-    local mock_dir = PPath:new("tests", project_root)
-    if mock_dir:exists() then mock_dir:rmdir() end
+    local mock_dir = vim.fs.joinpath("tests", project_root)
+    if vim.uv.fs_stat(mock_dir) then vim.fs.rm(mock_dir, { recursive = true }) end
   end)
 
   it("should include instruction file content when the file exists", function()
@@ -106,8 +108,8 @@ describe("generate_prompts", function()
   end)
 
   it("should not modify instructions if the file does not exist", function()
-    local mock_file = PPath:new("tests", project_root, "avante.md")
-    if mock_file:exists() then mock_file:rm() end
+    local mock_file = vim.fs.joinpath("tests", project_root, "avante.md")
+    if vim.uv.fs_stat(mock_file) then vim.fs.rm(mock_file) end
 
     local opts = {}
     llm.generate_prompts(opts)
